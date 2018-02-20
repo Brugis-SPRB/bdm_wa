@@ -16,4 +16,7 @@ class xmlPathThroughtRenderer(renderers.BaseRenderer):
     format = 'xml'
 
     def render(self, data, media_type=None, renderer_context=None):
-        return data.encode(self.charset)
+        try:
+            return data.encode(self.charset)
+        except Exception, e :
+            return data

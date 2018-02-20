@@ -18,12 +18,16 @@ from 	workflow import settings
 from	rest_framework	import	status
 from	django.db	import	connection
 from	collections	import	namedtuple
+from    rest_framework_xml.parsers import XMLParser
+from    rest_framework.parsers import JSONParser
+from compiler.pycodegen import EXCEPT
 
 
 # #
 # WFS autorisation Proxy ... key is extracted from url (@see urls.py) 
 class BdmWfsProxy(APIView):
 	renderer_classes = (xmlPathThroughtRenderer,)
+	parser_classes = (JSONParser, XMLParser,)
 	_devSchema_admin	 = 	settings.DEVSCHEMA_ADMIN
 	
 	# #
@@ -41,20 +45,28 @@ class BdmWfsProxy(APIView):
 		params	 = 	request.query_params
 		# print params
 		userkey = kwargs['key']
-		
-		return self.doProxy(request, params, userkey)
+		content = None
+		return self.doProxy(request, params, userkey, content)
 		
 	def	post(self, 	request, 	*args, **kwargs):
+		print "post 1"
 		params	 = 	request.query_params
+		print "post 2"
+		try:
+			content = request.body
+		except Exception, e :
+			print "post Exception"
+			print e
 		userkey = kwargs['key']
-		return self.doProxy(request, params, userkey)
+		print "post 3"
+		return self.doProxy(request, params, userkey, content)
 		
 	# #
 	# authorize user request ( token based) and forward request to upstream server
 	# @param userkey user token
 	# @param params query parameters 	
 	# connection to upstream server performed with predefined credentials
-	def	doProxy(self, 	request, params, userkey):
+	def	doProxy(self, 	request, params, userkey, content):
 		print "doProxy 1"
 		print userkey
 		aut = self.wfs_authorize(request, userkey)
@@ -63,23 +75,36 @@ class BdmWfsProxy(APIView):
 		data = 'INVALID REQUEST'
 		print "doProxy 3"
 		if aut:
-			print "doProxy 3 1"
-			resp = requests.get(self._upstream, params, auth=(self._user, self._pswd))
-			print "doProxy 3 2"
+			if (content is None):
+				print "doProxy 3 1 get"
+				resp = requests.get(self._upstream, params, auth=(self._user, self._pswd))
+			else:
+				print "doProxy 3 1 post"
+				resp = None
+				try:	
+					resp = requests.post(self._upstream, content, auth=(self._user, self._pswd))
+				except Exception, e :
+					print "doProxy requests.post Exception"
+					print e
+			#print "doProxy 3 2"
 			username = self.validateKey(userkey)
 			BdmCommandView.s_lasterrors[username] = resp.text
+			
 			data = resp.text
 			# #
-			# Check that response doesnt contains any Exception
+			# Check that content of valid response do not contain any Exception
 			hhtpstatus = resp.status_code
 			if resp.ok:
-				if "ows:ExceptionReport" in resp.text:
-					print "Exception reported" 
+				print "doProxy RESP ok"
+				if "ows:ExceptionReport" in data:
+					print "Server Exception reported" 
 					hhtpstatus = status.HTTP_500_INTERNAL_SERVER_ERROR
+			else:
+				 print "doProxy RESP nok"
+			print data.encode('utf-8')
 		else:
-			print "doProxy -3 1"
+			print "doProxy authorisation failure"
 			
-		print data
 		return	Response(data, 	status=hhtpstatus)
 		
 	
@@ -92,9 +117,15 @@ class BdmWfsProxy(APIView):
 		# extract user
 		username = self.validateKey(userkey)
 		print "username {}".format(username)
-		wfsRequestType = request.query_params['REQUEST'].upper()
+		wfsRequestType = "undefined"
+		try:
+			wfsRequestType = request.query_params['REQUEST'].upper()
+		except Exception, e :
+			wfsRequestType = "TRANSACTION"
+			
 		print "wfsRequestType {}".format(wfsRequestType)
-		if 'GETCAPABILITIES' == wfsRequestType or 'DESCRIBEFEATURETYPE' == wfsRequestType:
+		### Missing control on transaction
+		if 'GETCAPABILITIES' == wfsRequestType or 'DESCRIBEFEATURETYPE' == wfsRequestType or 'TRANSACTION' == wfsRequestType:
 			return True
 		elif 'GETFEATURE' == wfsRequestType:
 			print "GETFEATURE 1"

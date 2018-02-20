@@ -300,10 +300,17 @@ class	BdmAdminCommandView(APIView):
 		
 		sqlStatement	 = 	"update	{}.users set slock=0, userpswd=	\'{}\',	usermail= \'{}\' where username= \'{}\'".format(self._devSchema_admin, userpswd, usermail, user)
 		self.dbRawExec(sqlStatement, 'brugis_qgisplugin_admin')	
-		u = User.objects.get(username=user)
-		u.set_password(userpswd)
-		u.email = usermail
-		u.save()
+		try:
+			u = User.objects.get(username=user)
+			u.set_password(userpswd)
+			u.email = usermail
+			u.save()
+		except Exception as e:
+			user = 	User.objects.create_user(username='{}'.format(user),
+												email='{}'.format(usermail),
+												password='{}'.format(userpswd))
+			
+		
 		
 	# #
 	# 	isTableAssigned	:	check	if	table	is	assigned	to	any	user
