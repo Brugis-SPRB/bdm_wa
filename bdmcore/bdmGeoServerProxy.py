@@ -43,22 +43,19 @@ class BdmWfsProxy(APIView):
 	
 	def	get(self, 	request, 	*args, **kwargs):
 		params	 = 	request.query_params
-		# print params
 		userkey = kwargs['key']
 		content = None
 		return self.doProxy(request, params, userkey, content)
 		
 	def	post(self, 	request, 	*args, **kwargs):
-		print "post 1"
+		self.doDebugPrint("post 1")
 		params	 = 	request.query_params
-		print "post 2"
 		try:
 			content = request.body
 		except Exception, e :
-			print "post Exception"
-			print e
+			self.doDebugPrint("post Exception")
+			self.doDebugPrint(e)
 		userkey = kwargs['key']
-		print "post 3"
 		return self.doProxy(request, params, userkey, content)
 		
 	# #
@@ -67,43 +64,47 @@ class BdmWfsProxy(APIView):
 	# @param params query parameters 	
 	# connection to upstream server performed with predefined credentials
 	def	doProxy(self, 	request, params, userkey, content):
-		print "doProxy 1"
-		print userkey
+		self.doDebugPrint("doProxy 1")
+		self.doDebugPrint(userkey)
 		aut = self.wfs_authorize(request, userkey)
-		print "doProxy 2"
 		hhtpstatus = status.HTTP_401_UNAUTHORIZED
 		data = 'INVALID REQUEST'
-		print "doProxy 3"
+		
 		if aut:
 			if (content is None):
-				print "doProxy 3 1 get"
+				self.doDebugPrint("doProxy 3 1 get")
 				resp = requests.get(self._upstream, params, auth=(self._user, self._pswd))
 			else:
-				print "doProxy 3 1 post"
+				self.doDebugPrint("doProxy 3 1 post")
 				resp = None
 				try:	
 					resp = requests.post(self._upstream, content, auth=(self._user, self._pswd))
 				except Exception, e :
-					print "doProxy requests.post Exception"
-					print e
-			#print "doProxy 3 2"
+					self.doDebugPrint("doProxy requests.post Exception")
+					self.doDebugPrint(e)
 			username = self.validateKey(userkey)
 			BdmCommandView.s_lasterrors[username] = resp.text
 			
-			data = resp.text
+			#data = resp.text
+			try:
+				c = resp.content
+				data = c.decode('utf8')
+			except Exception, e:
+				self.doDebugPrint(  "cannot decode content" )
+				data = ''
+			
 			# #
 			# Check that content of valid response do not contain any Exception
 			hhtpstatus = resp.status_code
 			if resp.ok:
-				print "doProxy RESP ok"
 				if "ows:ExceptionReport" in data:
-					print "Server Exception reported" 
+					self.doDebugPrint("Server Exception reported") 
 					hhtpstatus = status.HTTP_500_INTERNAL_SERVER_ERROR
 			else:
-				 print "doProxy RESP nok"
-			print data.encode('utf-8')
+				self.doDebugPrint(  "doProxy RESP nok" )
+			self.doDebugPrint(data)
 		else:
-			print "doProxy authorisation failure"
+			self.doDebugPrint( "doProxy authorisation failure")
 			
 		return	Response(data, 	status=hhtpstatus)
 		
@@ -116,26 +117,24 @@ class BdmWfsProxy(APIView):
 	def wfs_authorize(self, request, userkey):
 		# extract user
 		username = self.validateKey(userkey)
-		print "username {}".format(username)
+		self.doDebugPrint( "username {}".format(username))
 		wfsRequestType = "undefined"
 		try:
 			wfsRequestType = request.query_params['REQUEST'].upper()
 		except Exception, e :
 			wfsRequestType = "TRANSACTION"
 			
-		print "wfsRequestType {}".format(wfsRequestType)
+		self.doDebugPrint(  "wfsRequestType {}".format(wfsRequestType))
 		### Missing control on transaction
 		if 'GETCAPABILITIES' == wfsRequestType or 'DESCRIBEFEATURETYPE' == wfsRequestType or 'TRANSACTION' == wfsRequestType:
 			return True
 		elif 'GETFEATURE' == wfsRequestType:
-			print "GETFEATURE 1"
 			# return True
 			layername = request.query_params['TYPENAME']
-			print "GETFEATURE 2"
 			
 			#tricky !!!! Remove table name prefix !!!!!
 			cleanlayername = layername.replace("{}:".format(self._workspace), '')
-			print "cleanlayername {}".format(cleanlayername)
+			self.doDebugPrint( "cleanlayername {}".format(cleanlayername))
 		
 			state = self.getUserTableState(username, cleanlayername)
 			# return len(state) > 0
@@ -186,7 +185,11 @@ class BdmWfsProxy(APIView):
 		nt_result	 = 	namedtuple('results', 	[col[0]	for	col	in	desc])
 		return	[nt_result(*row)	for	row	in	cursor.fetchall()]	
 	
-
+	def doDebugPrint(self, debugmsg, severe=False):
+		try:
+			print debugmsg.decode('utf8')
+		except:
+			pass
 
 # #
 #
