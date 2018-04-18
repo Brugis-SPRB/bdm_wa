@@ -1,4 +1,4 @@
-﻿  # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 # # 
 #  @file bdmcommandview.py
@@ -135,9 +135,8 @@ class	BdmCommandView(APIView):
 		
 	def validate(self, request):
 		key	 = request.query_params.get('key', 	None)
-		print request.query_params
+		self.doDebugPrint( request.query_params )
 		queryexist = "select user_name from {}.geokey where key = '{}' and expiration > now()".format(self._devSchema_admin, key)
-		print queryexist
 		usr = self.dbQueryExecSingleton(queryexist)
 		if len(usr) < 1:
 			return "undefined"
@@ -148,7 +147,7 @@ class	BdmCommandView(APIView):
 		action	 = 	request.query_params.get('action', 	None)
 		uname = self.validate(request)
 		
-		print "--E EXEC {} for {}".format(action, uname) 
+		self.doDebugPrint(  "--E EXEC {} for {}".format(action, uname) )
 	
 		
 		res	 = 	'UNKNOWN ACTION'
@@ -194,7 +193,9 @@ class	BdmCommandView(APIView):
 			self.resetCreationStatus(uname, request)
 			res	 = 	'DONE'
 		elif	action	 == 	'U_LOCK':
-			res	 = self.getUserLock(uname, request)	
+			res	 = self.getUserLock(uname, request)
+		elif	action	 == 	'U_MAIL':
+			res	 = self.getUserMail(uname, request)	
 		elif	action	 == 	'CLEANUP_ORPHANED':
 			res = self.doCleanupOrphaned(uname, request)		
 		elif	action	 == 	'U_T_STATE':
@@ -235,9 +236,9 @@ class	BdmCommandView(APIView):
 		return	Response(res, 	status=hhtpstatus)
 	
 	def getLastError(self, uname, request):
-		print "check last error for {}".format(uname)
+		self.doDebugPrint(  "check last error for {}".format(uname))
 		if uname in BdmCommandView.s_lasterrors:
-			print BdmCommandView.s_lasterrors[uname]
+			self.doDebugPrint(  BdmCommandView.s_lasterrors[uname])
 			return	self.asJsonValue(self._jkeyFunction, BdmCommandView.s_lasterrors[uname])	
 		
 	
@@ -362,7 +363,7 @@ class	BdmCommandView(APIView):
 		layername	 = 	request.query_params.get('lname', 	None)
 		usrname	 = 	uname
 		status	 = 	request.query_params.get('status', 	None)	
-		print "updateLayerStatus {} {} {}".format(usrname,status,layername)	
+		self.doDebugPrint(  "updateLayerStatus {} {} {}".format(usrname,status,layername))	
 		if	usrname == "undefined":	
 			insertrequest	 = 	"insert	into	{}.tables_states	(schema_name,	state,	user_name,	table_name)	values	(\'brugis_intra\',\'{}\',\'{}\',	\'{}\')".format(self._devSchema_admin, status, self._adminuser, 	layername)
 			updaterequest	 = 	"update	{}.tables_states	set	state	=	\'{}\'	where	table_name	=	\'{}\'".format(self._devSchema_admin, status, layername)
@@ -438,7 +439,7 @@ class	BdmCommandView(APIView):
 			val	 = 	self._brugis_dataflow_cin
 		elif len(val) < 	1:
 			val	 = 	self._brugis_dataflow_cin
-		print "getTableState {} {}".format(layername, val)
+		self.doDebugPrint( "getTableState {} {}".format(layername, val))
 		return	self.asJsonValue(self._jkeyFunction, val)
 		
 			
@@ -508,13 +509,22 @@ class	BdmCommandView(APIView):
 		params	 = 	request.query_params
 		layername	 = 	params.get('lname', 	None)
 		queryStructure	 = 	"select	\"ID\",	\"GEOMETRY\"	from	\"{}\".\"{}\"".format(self._devSchema_edit, layername)	
-		val	 = 	self.dbQueryExec(queryStructure)
+		val = ''
+		try:
+			val	 = 	self.dbQueryExec(queryStructure)
+		except	Exception	:
+			pass
 		if	len(val)	 < 	1:
-			val	 = 	"Invalid table structure"
+			message	 = 	"Invalid table structure"
 		else:
 			queryErrDisplay	 = 	"select	ST_IsValidReason(\"GEOMETRY\")	R	from	\"{}\".\"{}\"	where	not	ST_ISVALID(\"GEOMETRY\")".format(self._devSchema_edit, layername)
-			val	 = 	self.dbQueryExec(queryErrDisplay)
-		return	self.asJsonValue('VALID', val)
+			errorinfos	 = 	self.dbQueryExec(queryErrDisplay)
+			#iterate results
+			message = ''
+			for res in errorinfos:
+				message = '{}|{}'.format(message,res.decode('utf8'))
+		return	self.asJsonValue(self._jkeyFunction, message)		
+		
 
 	def	doBrugisEvent(self, 	uname, request):
 		params	 = 	request.query_params
@@ -525,7 +535,7 @@ class	BdmCommandView(APIView):
 		info	 = 	params.get('info', 	None)
 		context	 = 	"BdmWebAccess"
 		hname	 = 	request.META['REMOTE_ADDR']
-		print request.META
+		self.doDebugPrint( request.META)
 		eventQuery	 = 	"""insert	into	{}.events(
 		user_name,	table_name,	action,	initialstate,	context,	result,	
 		info,	client)	VALUES	('{}',	'{}',	'{}',	'{}',	'{}',	'{}',	'{}',	'{}')""".format(self._devSchema_admin, uname, 	lname, baction, state, context	 + 	"_"	 + 	self._myVersion, res, info, hname)
@@ -583,4 +593,9 @@ class	BdmCommandView(APIView):
 		d	 = 	{name:	value}
 		return	d
 	
+	def doDebugPrint(self, debugmsg, severe=False):
+		try:
+			print debugmsg.decode('utf8')
+		except:
+			pass
 	
