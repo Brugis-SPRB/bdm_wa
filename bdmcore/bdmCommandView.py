@@ -13,8 +13,10 @@ import	smtplib
 from	collections	import	namedtuple
 import 	sys
 import  uuid
+import  os
 
 from 	workflow import settings
+from operator import contains
 
 
 # #
@@ -490,10 +492,11 @@ class	BdmCommandView(APIView):
 		
 		
 	def	doSendMail(self, 	uname, request):
-		params	 = 	request.query_params
-		body	 = 	params.get('mail_message', 	None)
-		receiver	 = 	params.get('mail_recipient', 	None)
-		subject	 = 	self._emailDefaultSubject
+		params	 	= 	request.query_params
+		body		= 	params.get('mail_message', 	None)
+		receiver	= 	params.get('mail_recipient', 	None)
+		subject 	= 	params.get('mail_subject', 	self._emailDefaultSubject)
+		
 		
 		sender	 = 	self._brugisEmailAdress
 		msg	 = 	"\r\n".join(["From:	"	 + 	sender, 	"To:	"	 + 	receiver, "Subject:	"	 + 	subject, "", 	body])
@@ -528,17 +531,20 @@ class	BdmCommandView(APIView):
 
 	def	doBrugisEvent(self, 	uname, request):
 		params	 = 	request.query_params
-		lname	 = 	params.get('layername', 	None)
+		lname	 = 	params.get('lname', 	None)
 		baction	 = 	params.get('trans', 	None)
 		state	 = 	params.get('state', 	None)
+		hname	 = 	params.get('hname', 	request.META['REMOTE_ADDR'])
+		
 		res	 = 	params.get('result', 	None)	
 		info	 = 	params.get('info', 	None)
-		context	 = 	"BdmWebAccess"
-		hname	 = 	request.META['REMOTE_ADDR']
+		context	 = 	os.path.basename(__file__)
+		
 		self.doDebugPrint( request.META)
 		eventQuery	 = 	"""insert	into	{}.events(
 		user_name,	table_name,	action,	initialstate,	context,	result,	
 		info,	client)	VALUES	('{}',	'{}',	'{}',	'{}',	'{}',	'{}',	'{}',	'{}')""".format(self._devSchema_admin, uname, 	lname, baction, state, context	 + 	"_"	 + 	self._myVersion, res, info, hname)
+		self.doDebugPrint(eventQuery)
 		self.dbRawExec(eventQuery)
 	
 	#####################################
